@@ -16,7 +16,9 @@
 
 package org.springframework.boot.logging.logback;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import ch.qos.logback.classic.Level;
@@ -28,8 +30,12 @@ import ch.qos.logback.core.CoreConstants;
 import ch.qos.logback.core.pattern.Converter;
 import ch.qos.logback.core.spi.ContextAware;
 import ch.qos.logback.core.spi.LifeCycle;
+import org.crac.Context;
+import org.crac.Resource;
 
+import org.springframework.core.NativeDetector;
 import org.springframework.util.Assert;
+import org.springframework.util.ClassUtils;
 
 /**
  * Allows programmatic configuration of logback which is usually faster than parsing XML.
@@ -39,6 +45,8 @@ import org.springframework.util.Assert;
 class LogbackConfigurator {
 
 	private final LoggerContext context;
+
+	private final List<Appender<?>> appenders = new ArrayList<>();
 
 	LogbackConfigurator(LoggerContext context) {
 		Assert.notNull(context, "Context must not be null");
@@ -69,6 +77,7 @@ class LogbackConfigurator {
 	void appender(String name, Appender<?> appender) {
 		appender.setName(name);
 		start(appender);
+		this.appenders.add(appender);
 	}
 
 	void logger(String name, Level level) {
@@ -108,4 +117,8 @@ class LogbackConfigurator {
 		lifeCycle.start();
 	}
 
+	public List<Appender<?>> getAppenders() {
+		this.appenders.forEach(appender -> System.out.println("Get " + appender.getName()));
+		return this.appenders;
+	}
 }

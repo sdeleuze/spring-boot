@@ -32,6 +32,7 @@ import ch.qos.logback.classic.joran.JoranConfigurator;
 import ch.qos.logback.classic.jul.LevelChangePropagator;
 import ch.qos.logback.classic.spi.TurboFilterList;
 import ch.qos.logback.classic.turbo.TurboFilter;
+import ch.qos.logback.core.Appender;
 import ch.qos.logback.core.joran.spi.JoranException;
 import ch.qos.logback.core.spi.FilterReply;
 import ch.qos.logback.core.status.OnConsoleStatusListener;
@@ -39,6 +40,8 @@ import ch.qos.logback.core.status.Status;
 import ch.qos.logback.core.status.StatusUtil;
 import ch.qos.logback.core.util.StatusListenerConfigHelper;
 import ch.qos.logback.core.util.StatusPrinter;
+import org.crac.Context;
+import org.crac.Resource;
 import org.slf4j.ILoggerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,6 +61,7 @@ import org.springframework.boot.logging.LoggingInitializationContext;
 import org.springframework.boot.logging.LoggingSystem;
 import org.springframework.boot.logging.LoggingSystemFactory;
 import org.springframework.boot.logging.LoggingSystemProperties;
+import org.springframework.core.NativeDetector;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.env.ConfigurableEnvironment;
@@ -104,6 +108,9 @@ public class LogbackLoggingSystem extends AbstractLoggingSystem implements BeanF
 		}
 
 	};
+
+	// Just for keeping a strong reference to the registered CRaC Resource, if any
+	private Object cracResource;
 
 	public LogbackLoggingSystem(ClassLoader classLoader) {
 		super(classLoader);
@@ -233,7 +240,49 @@ public class LogbackLoggingSystem extends AbstractLoggingSystem implements BeanF
 					: new LogbackConfigurator(context);
 			new DefaultLogbackConfiguration(logFile).apply(configurator);
 			context.setPackagingDataEnabled(true);
+			if (!NativeDetector.inNativeImage() && ClassUtils.isPresent("org.crac.Core", getClass().getClassLoader())) {
+				this.cracResource = new CracDelegate().registerResource(configurator.getAppenders());
+			}
 		});
+	}
+
+	private class CracDelegate {
+
+		public Object registerResource(List<Appender<?>> appenders) {
+			System.out.println("Registering logging CracResourceAdapter");
+			CracBootResourceAdapter resourceAdapter = new CracBootResourceAdapter(appenders);
+			org.crac.Core.getGlobalContext().register(resourceAdapter);
+			return resourceAdapter;
+		}
+
+		private class CracBootResourceAdapter implements org.crac.Resource {
+
+			private final List<Appender<?>> appenders;
+
+			public CracBootResourceAdapter(List<Appender<?>> appenders) {
+				this.appenders = appenders;
+			}
+
+			@Override
+			public void beforeCheckpoint(Context<? extends Resource> context) {
+				System.out.println("beforeCheckpoint logging");
+				for (Appender<?> appender : this.appenders) {
+					appender.stop();
+					System.out.println("Stopped " + appender.getName() + " before checkpoint");
+				}
+			}
+
+			@Override
+			public void afterRestore(Context<? extends Resource> context) {
+				System.out.println("afterRestore logging");
+				for (Appender<?> appender : this.appenders) {
+					appender.start();
+					System.out.println("Restarted " + appender.getName() + " after restore");
+				}
+			}
+
+		}
+
 	}
 
 	@Override
