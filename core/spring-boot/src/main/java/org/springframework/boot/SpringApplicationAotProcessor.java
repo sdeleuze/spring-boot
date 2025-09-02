@@ -20,6 +20,7 @@ import java.lang.reflect.Method;
 import java.nio.file.Paths;
 import java.util.Arrays;
 
+import org.springframework.aot.generate.GeneratedArtifact;
 import org.springframework.boot.SpringApplication.AbandonedRunException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -38,6 +39,7 @@ import org.springframework.util.function.ThrowingSupplier;
  * @author Stephane Nicoll
  * @author Andy Wilkinson
  * @author Phillip Webb
+ * @author Sebastien Deleuze
  * @since 3.0.0
  */
 public class SpringApplicationAotProcessor extends ContextAotProcessor {
@@ -65,20 +67,23 @@ public class SpringApplicationAotProcessor extends ContextAotProcessor {
 	}
 
 	public static void main(String[] args) throws Exception {
-		int requiredArgs = 6;
+		int requiredArgs = 7;
 		Assert.state(args.length >= requiredArgs, () -> "Usage: " + SpringApplicationAotProcessor.class.getName()
-				+ " <applicationMainClass> <sourceOutput> <resourceOutput> <classOutput> <groupId> <artifactId> <originalArgs...>");
+				+ " <applicationMainClass> <sourceOutput> <resourceOutput> <classOutput> <groupId> <artifactId> <artifactTypes> <originalArgs...>");
 		Class<?> application = Class.forName(args[0]);
-		Settings settings = Settings.builder()
+		Settings.Builder builder = Settings.builder()
 			.sourceOutput(Paths.get(args[1]))
 			.resourceOutput(Paths.get(args[2]))
 			.classOutput(Paths.get(args[3]))
 			.groupId((StringUtils.hasText(args[4])) ? args[4] : "unspecified")
-			.artifactId(args[5])
-			.build();
+			.artifactId(args[5]);
+		String[] artifactTypes = args[6].split(",");
+		for (String artifactType : artifactTypes) {
+			builder.generatedArtifact(GeneratedArtifact.valueOf(artifactType));
+		}
 		String[] applicationArgs = (args.length > requiredArgs) ? Arrays.copyOfRange(args, requiredArgs, args.length)
 				: new String[0];
-		new SpringApplicationAotProcessor(application, settings, applicationArgs).process();
+		new SpringApplicationAotProcessor(application, builder.build(), applicationArgs).process();
 	}
 
 	/**

@@ -17,20 +17,27 @@
 package org.springframework.boot.gradle.tasks.aot;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.provider.Property;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.JavaExec;
+import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.work.DisableCachingByDefault;
+
+import org.springframework.aot.generate.GeneratedArtifact;
 
 /**
  * Specialization of {@link JavaExec} to be used as a base class for tasks that perform
  * ahead-of-time processing.
  *
  * @author Andy Wilkinson
+ * @author Sebastien Deleuze
  * @since 3.0.0
  */
 @DisableCachingByDefault(because = "Cacheability can only be determined by a concrete implementation")
@@ -46,12 +53,24 @@ public abstract class AbstractAot extends JavaExec {
 
 	private final Property<String> artifactId;
 
+	private final Property<Boolean> beanRegistration;
+
+	private final Property<Boolean> predefinedClasses;
+
+	private final Property<Boolean> classpathIndexes;
+
+	private final Property<Boolean> reachabilityMetadata;
+
 	protected AbstractAot() {
 		this.sourcesDir = getProject().getObjects().directoryProperty();
 		this.resourcesDir = getProject().getObjects().directoryProperty();
 		this.classesDir = getProject().getObjects().directoryProperty();
 		this.groupId = getProject().getObjects().property(String.class);
 		this.artifactId = getProject().getObjects().property(String.class);
+		this.beanRegistration = getProject().getObjects().property(Boolean.class);
+		this.predefinedClasses = getProject().getObjects().property(Boolean.class);
+		this.classpathIndexes = getProject().getObjects().property(Boolean.class);
+		this.reachabilityMetadata = getProject().getObjects().property(Boolean.class);
 	}
 
 	/**
@@ -99,6 +118,30 @@ public abstract class AbstractAot extends JavaExec {
 		return this.classesDir;
 	}
 
+	@Input
+	@Optional
+	public final Property<Boolean> getBeanRegistration() {
+		return this.beanRegistration;
+	}
+
+	@Input
+	@Optional
+	public final Property<Boolean> getPredefinedClasses() {
+		return this.predefinedClasses;
+	}
+
+	@Input
+	@Optional
+	public final Property<Boolean> getClasspathIndexes() {
+		return this.classpathIndexes;
+	}
+
+	@Input
+	@Optional
+	public final Property<Boolean> getReachabilityMetadata() {
+		return this.reachabilityMetadata;
+	}
+
 	List<String> processorArgs() {
 		List<String> args = new ArrayList<>();
 		args.add(getSourcesOutput().getAsFile().get().getAbsolutePath());
@@ -106,6 +149,26 @@ public abstract class AbstractAot extends JavaExec {
 		args.add(getClassesOutput().getAsFile().get().getAbsolutePath());
 		args.add(getGroupId().get());
 		args.add(getArtifactId().get());
+		Set<GeneratedArtifact> artifactTypes = new HashSet<>();
+		if (Boolean.TRUE.equals(this.beanRegistration.getOrNull())) {
+			artifactTypes.add(GeneratedArtifact.BEAN_REGISTRATION);
+		}
+		if (Boolean.TRUE.equals(this.predefinedClasses.getOrNull())) {
+			artifactTypes.add(GeneratedArtifact.PREDEFINED_CLASSES);
+		}
+		if (Boolean.TRUE.equals(this.classpathIndexes.getOrNull())) {
+			artifactTypes.add(GeneratedArtifact.CLASSPATH_INDEXES);
+		}
+		if (Boolean.TRUE.equals(this.reachabilityMetadata.getOrNull())) {
+			artifactTypes.add(GeneratedArtifact.REACHABILITY_METADATA);
+		}
+		if (artifactTypes.isEmpty()) {
+			artifactTypes.add(GeneratedArtifact.BEAN_REGISTRATION);
+			artifactTypes.add(GeneratedArtifact.PREDEFINED_CLASSES);
+			artifactTypes.add(GeneratedArtifact.CLASSPATH_INDEXES);
+			artifactTypes.add(GeneratedArtifact.REACHABILITY_METADATA);
+		}
+		args.add(artifactTypes.stream().map(GeneratedArtifact::toString).collect(Collectors.joining(",")));
 		args.addAll(super.getArgs());
 		return args;
 	}
